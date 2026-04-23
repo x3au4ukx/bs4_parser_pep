@@ -137,7 +137,7 @@ def main():
     results = MODE_TO_FUNCTION[parser_mode](session)
     if results is not None:
         control_output(results, args)
-    logging.info('Парсер завершил работу.') 
+    logging.info('Парсер завершил работу.')
 
 
 if __name__ == '__main__':
