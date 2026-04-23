@@ -105,7 +105,7 @@ def pep(session):
         if soup.find('abbr').text not in status_in_table:
             logging.warning('Несовпадающие статусы:')
             logging.warning(pep_detail_url)
-            logging.warning(f'Статус в карточке: {soup.find('abbr').text}')
+            logging.warning(f'Статус в карточке: {soup.find("abbr").text}')
             logging.warning(f'Ожидаемые статусы: {list(status_in_table)}')
         peps[soup.find('abbr').text] = peps.get(soup.find('abbr').text, 0) + 1
     results += [(status, count) for status, count in peps.items()]
