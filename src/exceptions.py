@@ -1,3 +1,6 @@
 class ParserFindTagException(Exception):
     """Вызывается, когда парсер не может найти тег."""
-    pass
+
+
+class PythonVersionsNotFoundError(Exception):
+    """Исключение, когда не удалось найти список версий Python на странице."""

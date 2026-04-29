@@ -9,10 +9,12 @@ from tqdm import tqdm
 from configs import configure_argument_parser, configure_logging
 from constants import BASE_DIR, EXPECTED_STATUS, MAIN_DOC_URL, PEP_DOC_URL
 from outputs import control_output
+from exceptions import PythonVersionsNotFoundError
 from utils import find_tag, get_response
 
 
 def whats_new(session):
+    """Парсит список нововведений из документации Python."""
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
     response = get_response(session, whats_new_url)
     if response is None:
@@ -26,7 +28,7 @@ def whats_new(session):
     results = [('Ссылка на статью', 'Заголовок', 'Редактор, автор')]
     for section in tqdm(sections_by_python):
         version_a_tag = section.find('a')
-        version_link = urljoin(whats_new_url, version_a_tag['href'])
+        version_link = urljoin(whats_new_url, version_a_tag.get('href'))
         response = get_response(session, version_link)
         if response is None:
             continue
@@ -41,22 +43,24 @@ def whats_new(session):
 
 
 def latest_versions(session):
+    """Извлекает доступные версии Python из боковой панели."""
     response = get_response(session, MAIN_DOC_URL)
     if response is None:
         return
     soup = BeautifulSoup(response.text, 'lxml')
     sidebar = find_tag(soup, 'div', {'class': 'sphinxsidebarwrapper'})
     ul_tags = sidebar.find_all('ul')
+    a_tags = None
     for ul in ul_tags:
         if 'All versions' in ul.text:
             a_tags = ul.find_all('a')
             break
-    else:
-        raise Exception('Не найден список c версиями Python')
+    if a_tags is None:
+        raise PythonVersionsNotFoundError('Не найден список c версиями Python')
     results = [('Ссылка на документацию', 'Версия', 'Статус')]
     pattern = r'Python (?P<version>\d\.\d+) \((?P<status>.*)\)'
     for a_tag in a_tags:
-        link = a_tag['href']
+        link = a_tag.get('href')
         text_match = re.search(pattern, a_tag.text)
         if text_match is not None:
             version, status = text_match.groups()
@@ -69,6 +73,7 @@ def latest_versions(session):
 
 
 def download(session):
+    """Скачивает ZIP-архив с HTML-документацией в папку downloads."""
     downloads_url = urljoin(MAIN_DOC_URL, 'download.html')
     response = get_response(session, downloads_url)
     if response is None:
@@ -77,7 +82,7 @@ def download(session):
     table = find_tag(soup, 'table', attrs={'class': 'docutils'})
     docs_html = table.find(
         'a', {'href': re.compile(r'.+docs-html\.zip$')}
-    )['href']
+    ).get('href')
     archive_url = urljoin(downloads_url, docs_html)
     filename = archive_url.split('/')[-1]
     downloads_dir = BASE_DIR / 'downloads'
@@ -86,31 +91,33 @@ def download(session):
     response = session.get(archive_url)
     with open(archive_path, 'wb') as file:
         file.write(response.content)
-    print(filename)
     logging.info(f'Архив был загружен и сохранён: {archive_path}')
 
 
 def pep(session):
+    """Собирает статистику статусов PEP с проверкой соответствия."""
     response = get_response(session, PEP_DOC_URL)
     if response is None:
         return
     soup = BeautifulSoup(response.text, features='lxml')
-    section = soup.find('section', attrs={'id': 'index-by-category'})
+    section = find_tag(soup, 'section', attrs={'id': 'index-by-category'})
     trs = [tr for tbody in section.find_all('tbody')
            for tr in tbody.find_all('tr')]
     peps = {}
     results = [('Статус', 'Количество')]
     for pep in trs:
         status_in_table = EXPECTED_STATUS[pep.find('abbr').text[1:]]
-        pep_detail_url = urljoin(PEP_DOC_URL, pep.find('a')['href'])
+        pep_detail_url = urljoin(PEP_DOC_URL, pep.find('a').get('href'))
         response = get_response(requests_cache.CachedSession(), pep_detail_url)
         soup = BeautifulSoup(response.text, features='lxml')
-        if soup.find('abbr').text not in status_in_table:
+        abbr_tag_text = find_tag(soup, 'abbr').text
+        if abbr_tag_text not in status_in_table:
+            list_of_expected_statuses = list(status_in_table)
             logging.warning('Несовпадающие статусы:')
             logging.warning(pep_detail_url)
-            logging.warning(f'Статус в карточке: {soup.find("abbr").text}')
-            logging.warning(f'Ожидаемые статусы: {list(status_in_table)}')
-        peps[soup.find('abbr').text] = peps.get(soup.find('abbr').text, 0) + 1
+            logging.warning(f'Статус в карточке: {abbr_tag_text}')
+            logging.warning(f'Ожидаемые статусы: {list_of_expected_statuses}')
+        peps[abbr_tag_text] = peps.get(abbr_tag_text, 0) + 1
     results += [(status, count) for status, count in peps.items()]
     results += [('Total', len(trs))]
     return results
@@ -125,6 +132,7 @@ MODE_TO_FUNCTION = {
 
 
 def main():
+    """Главная функция: парсит аргументы и запускает выбранный режим."""
     configure_logging()
     logging.info('Парсер запущен!')
     arg_parser = configure_argument_parser(MODE_TO_FUNCTION.keys())
