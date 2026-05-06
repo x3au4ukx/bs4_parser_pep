@@ -16,8 +16,8 @@
 
 1. Клонируйте репозиторий:
 ```bash
-git clone <URL репозитория>
-cd <папка проекта>
+git clone https://github.com/x3au4ukx/bs4_parser_pep.git
+cd bs4_parser_pep
 ```
 
 2. Установите зависимости:
@@ -27,6 +27,8 @@ pip install -r requirements.txt
 
 ## Примеры использования
 ```bash
+cd src
+
 # Показать последние нововведения в Python
 python main.py whats-new
 
